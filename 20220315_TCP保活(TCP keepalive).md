@@ -52,7 +52,7 @@ TCP协议中有长连接和短连接之分。短连接环境下，数据交互�
 
 KeepAlive默认不是开启的，如果想使用KeepAlive，需要在你的应用中设置SO_KEEPALIVE才可以生效。
 
-### 查看当前的配置：
+查看当前的配置：
 
 ```
 cat /proc/sys/net/ipv4/tcp_keepalive_time
