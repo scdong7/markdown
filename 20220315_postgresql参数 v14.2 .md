@@ -677,7 +677,7 @@ dynamic_shared_memory_type = posix	# the default is the first option
 													# (change requires restart)
 #wal_level决定多少信息写入到 WAL 中。默认值是replica，它会写入足够的数据以支持 WAL归档和复制，包括在后备服务器上运行只读查询。#minimal会去掉除从崩溃或者立即 关机中进行恢复所需的信息之外的所有记录。
 #最后，logical会增加支持逻辑解码所需的 信息。每个层次包括所有更低层次记录的信息。这个参数只能在服务器启动时设置。
-#在minimal级别中，某些批量操作的 WAL 日志可以被安全地跳过，这可以使那些操作更 快(见第 14.4.7 节)。这种优化可以应用的操作包括:
+#在minimal级别中，某些批量操作的 WAL 日志可以被安全地跳过，这可以使那些操作更快。这种优化可以应用的操作包括:
 #CREATE TABLE AS
 #CREATE INDEX
 #CLUSTER COPY到在同一个事务中被创建或截断的表中
@@ -697,18 +697,17 @@ dynamic_shared_memory_type = posix	# the default is the first option
 #这可以在多个时机来完成:在集簇被关闭时或在fsync因为运 行initdb --sync-only而打开时、运行sync时、卸载文件系统时或者重启服务器时。
 #在很多情况下，为不重要的事务关闭synchronous_commit可以提供很多关闭fsync的潜在性能收益，并不会有的同时， 
 #关闭fsync可以提供很多潜在的性能优势，而不会有伴随 着的数据损坏风险。
-#sync只能在postgresql.conf文件中或在服务器命令行上设置。如果你关闭这个参数， 请也考虑关闭full_page_writes。
+#fsync只能在postgresql.conf文件中或在服务器命令行上设置。如果你关闭这个参数， 请也考虑关闭full_page_writes。
 
 #synchronous_commit = on		# synchronization level;
 														# off, local, remote_write, remote_apply, or on
-#指定在命令返回“success”指示给客户端之前，一个事务是否需要等待WAL记录被写入磁盘。合法的值是on、remote_apply、remote_write、#local和off。默认的并且安全 的设置是on。
+#指定在命令返回“success”指示给客户端之前，一个事务是否需要等待WAL记录被写入磁盘。合法的值是on、remote_apply、remote_write、#local和off。默认的并且安全的设置是on。
 #当设置为off时，在向客户端报告成功和真正保证事务不会被服务器崩溃威 胁之间会有延迟(最大的延迟是wal_writer_delay的三倍)。
-#不同于fsync，将这个参数 设置为off不会产生数据库不一致性的风险:一个操作系统或数据库崩溃可能会造成一些 最近据说已提交的事务丢失，
+#不同于fsync，将这个参数设置为off不会产生数据库不一致性的风险:一个操作系统或数据库崩溃可能会造成一些最近据说已提交的事务丢失，
 #但数据库状态是一致的，就像这些事务已经被干净地中 止。
 #因此，当性能比完全确保事务的持久性更重要时，关闭synchronous_commit可以作 为一个有效的代替手段。
 
 #如果synchronous_standby_names为非空，这个参数也控制事务提交是否将等待它们的 WAL 记录被复制到后备服务器上。
-
 #当这个参数被设置为on时，直到来自当前同步的后备服务器的回复指示它们已经收到了事务的提交记录并将其刷入磁盘，主服务器上的事务才会提交。#这保证事务将不会被丢失，除非主服务器和所有同步后备都遭受到了数 据库存储损坏的问题。
 #当被设置为remote_apply时，提交将会等待，直到来自当前的同步后备的回复指示它们已经收到了该事务的提交记录并且已经应用了该事务，
 #这样该事 务才变得对后备上的查询可见。
