@@ -152,6 +152,17 @@ HOT是“Heap Only Tuple”（仅元组堆）的缩写（与Overflow Update CHai
   HOT消除了拥有完全相同键值的索引记录，减少了索引大小
 ```
 
+## pageinspect插件
+
+```sql
+SELECT * FROM page_header(get_raw_page('tb2', 0));
+SELECT * FROM heap_page_items(get_raw_page('tb2', 0));
+SELECT * FROM heap_page_item_attrs(get_raw_page('tb2', 0), 'tb2'::regclass);
+SELECT tuple_data_split('tb2'::regclass, t_data, t_infomask, t_infomask2, t_bits) FROM heap_page_items(get_raw_page('tb2', 0));
+```
+
+
+
 ## 表操作
 
 ### 打开表
