@@ -159,6 +159,9 @@ SELECT * FROM page_header(get_raw_page('tb2', 0));
 SELECT * FROM heap_page_items(get_raw_page('tb2', 0));
 SELECT * FROM heap_page_item_attrs(get_raw_page('tb2', 0), 'tb2'::regclass);
 SELECT tuple_data_split('tb2'::regclass, t_data, t_infomask, t_infomask2, t_bits) FROM heap_page_items(get_raw_page('tb2', 0));
+
+
+select pg_relation_filepath('t2');
 ```
 
 
