@@ -4,7 +4,7 @@
 
 ## 事务隔离级别
 
-SQL标准定义了四种隔离级 
+SQL标准定义了四种隔离级别
 
 读未提交(READ UNCOMMITTED)
 读已提交(READ COMMITTED)
@@ -22,12 +22,12 @@ SQL标准定义了四种隔离级
 4. 序列化异常
    成功提交一组事务的结果与这些事务所有可能的串行执行结果都不一致。
 
-| 隔离级别 | 脏读              | 不可重复读 | 幻读              | 序列化异常 |
-| -------- | ----------------- | ---------- | ----------------- | ---------- |
-| 读未提交 | 允许，但不在 PG中 | 可能       | 可能              | 可能       |
-| 读已提交 | 不可能            | 可能       | 可能              | 可能       |
-| 可重复读 | 不可能            | 不可能     | 允许，但不在 PG中 | 可能       |
-| 可序列化 | 不可能            | 不可能     | 不可能            | 不可能     |
+| 隔离级别 |       脏读        | 不可重复读 |       幻读        | 序列化异常 |
+| :------- | :---------------: | :--------: | :---------------: | :--------: |
+| 读未提交 | 允许，但不在 PG中 |    可能    |       可能        |    可能    |
+| 读已提交 |      不可能       |    可能    |       可能        |    可能    |
+| 可重复读 |      不可能       |   不可能   | 允许，但不在 PG中 |    可能    |
+| 可序列化 |      不可能       |   不可能   |      不可能       |   不可能   |
 
 在PostgreSQL中，你可以请求四种标准事务隔离级别中的任意一种，但是内部只实现了三种 不同的隔离级别，即 PostgreSQL 的读未提交模式的行为和读已提交相同。
 
@@ -82,17 +82,17 @@ PostgreSQL提供了多种锁模式用于控制对表中数据的并发访问。 
 
 表锁冲突矩阵
 
-|                        | 已           | 申        | 请            | 到                     | 的    | 锁                  | 模        | 式               |
-| ---------------------- | ------------ | --------- | ------------- | ---------------------- | ----- | ------------------- | --------- | ---------------- |
-| **请求的锁模式**       | ACCESS SHARE | ROW SHARE | ROW EXCLUSIVE | SHARE UPDATE EXCLUSIVE | SHARE | SHARE ROW EXCLUSIVE | EXCLUSIVE | ACCESS EXCLUSIVE |
-| ACCESS SHARE           | Y            | Y         | Y             | Y                      | Y     | Y                   | Y         | N                |
-| ROW SHARE              | Y            | Y         | Y             | Y                      | Y     | Y                   | N         | N                |
-| ROW EXCLUSIVE          | Y            | Y         | Y             | Y                      | N     | N                   | N         | N                |
-| SHARE UPDATE EXCLUSIVE | Y            | Y         | Y             | N                      | N     | N                   | N         | N                |
-| SHARE                  | Y            | Y         | N             | N                      | Y     | N                   | N         | N                |
-| SHARE ROW EXCLUSIVE    | Y            | Y         | N             | N                      | N     | N                   | N         | N                |
-| EXCLUSIVE              | Y            | N         | N             | N                      | N     | N                   | N         | N                |
-| ACCESS EXCLUSIVE       | N            | N         | N             | N                      | N     | N                   | N         | N                |
+|                        |                                                              | 已           | 申        | 请            | 到                     | 的    | 锁                    | 模        | 式               |
+| ---------------------- | ------------------------------------------------------------ | ------------ | --------- | ------------- | ---------------------- | ----- | --------------------- | --------- | ---------------- |
+| **请求的锁模式**       | sql命令                                                      | access share | row share | row exclusive | share update exclusive | share | share   row exclusive | exclusive | access exclusive |
+| access share           | select                                                       |              |           |               |                        |       |                       |           | X                |
+| row share              | select for update、 select for share                         |              |           |               |                        |       |                       | X         | X                |
+| row exclusive          | update 、delete、insert                                      |              |           |               |                        |       |                       | X         | X                |
+| share update exclusive | vacuum(不带full)、analyze、 create index concurrently、reindex concurrently、 create statistics以及某些alter index和alter table的变体获得 |              |           |               | X                      | X     | X                     | X         | X                |
+| share                  | create index(不带concurrently)取得                           |              |           | X             | X                      |       | X                     | X         | X                |
+| share   row exclusive  | create trigger和某些形式的 alter table                       |              |           | X             | X                      | X     | X                     | X         | X                |
+| exclusive              | refresh materialized view concurrently                       |              | X         | X             | X                      | X     | X                     | X         | X                |
+| access exclusive       | 由alter table、drop table、truncate、reindex、cluster、vacuum full和refresh materialized view (不带concurrently)命令获取。 很多形式的al ter index和alter table也在这个层面上获得锁 | X            | X         | X             | X                      | X     | X                     | X         | X                |
 
 
 
@@ -122,14 +122,18 @@ PostgreSQL提供了多种锁模式用于控制对表中数据的并发访问。 
 
 |                   | 当            | 前        | 锁                | 模式       |
 | ----------------- | ------------- | --------- | ----------------- | ---------- |
-| **请求的锁模式**  | FOR KEY SHARE | FOR SHARE | FOR NO KEY UPDATE | FOR UPDATE |
-| FOR KEY SHARE     | Y             | Y         | Y                 | N          |
-| FOR SHARE         | Y             | Y         | N                 | N          |
-| FOR NO KEY UPDATE | Y             | N         | N                 | N          |
-| FOR UPDATE        | N             | N         | N                 | N          |
+| **请求的锁模式**  | for key share | for share | for no key update | for update |
+| for key share     |               |           |                   | X          |
+| for share         |               |           | X                 | X          |
+| for no key update |               | X         | X                 | X          |
+| for update        | X             | X         | X                 | X          |
 
 
 
 ## 页级锁
 
-除了表级别和行级别的锁以外，页面级别的共享/排他锁被用来控制对共享缓冲池中表页面 的读/写。 这些锁在行被抓取或者更新后马上被释放。
+​	除了表级别和行级别的锁以外，页面级别的共享/排他锁被用来控制对共享缓冲池中表页面 的读/写。 这些锁在行被抓取或者更新后马上被释放。
+
+## 咨询锁
+
+​	参考咨询锁函数。
