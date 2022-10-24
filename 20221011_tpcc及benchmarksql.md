@@ -1,4 +1,4 @@
-# tppc
+# tpcc
 
 TPC-C 于 1992 年 7 月 23 日认可为新的基准测试。TPC(Transaction Processing Performance Council，事务处理性能委员会)-C是衡量联机事务处理（OLTP，Online TransactionProcessing）系统的工业标准，是行业中公认的权威和最为复杂的在线事务处理基准测试。它通过模拟仓库和订单管理系统，测试广泛的数据库功能，包括查询、更新和 mini-batch事务（队列式小批量事务）。TPC-C基准测试针对一种模拟订单录入与销售环境测量每分钟事务（tpmC-transactions per minute）吞吐量。
 
