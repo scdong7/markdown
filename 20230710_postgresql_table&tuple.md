@@ -225,14 +225,48 @@ HOT是“Heap Only Tuple”（仅元组堆）的缩写（与Overflow Update CHai
 
 ## 2.4 pageinspect插件
 
+PG提供了一些扩展的功能，这些扩展功能的想要sql脚本都放在了 `share/extension/`目录下
+
 ```sql
+CREATE EXTENSION pageinspect; 
+
 SELECT * FROM page_header(get_raw_page('tb2', 0));
 SELECT * FROM heap_page_items(get_raw_page('tb2', 0));
-SELECT * FROM heap_page_item_attrs(get_raw_page('tb2', 0), 'tb2'::regclass);
+SELECT * FROM heap_page_item_attrs(get_raw_page('t3', 0), 't3'::regclass);
 SELECT tuple_data_split('tb2'::regclass, t_data, t_infomask, t_infomask2, t_bits) FROM heap_page_items(get_raw_page('tb2', 0));
 
-
 select pg_relation_filepath('t2');
+```
+
+2.5 pg_filedump 
+
+https://github.com/df7cb/pg_filedump
+
+```shell
+[postgres@localhost 5]$ pg_filedump 16423
+
+*******************************************************************
+* PostgreSQL File/Block Formatted Dump Utility
+*
+* File: 16423
+* Options used: None
+*******************************************************************
+
+Block    0 ********************************************************
+<Header> -----
+ Block Offset: 0x00000000         Offsets: Lower      32 (0x0020)
+ Block: Size 8192  Version    4            Upper    8128 (0x1fc0)
+ LSN:  logid      0 recoff 0x017a8ef8      Special  8192 (0x2000)
+ Items:    2                      Free Space: 8096
+ Checksum: 0x0000  Prune XID: 0x00000000  Flags: 0x0000 ()
+ Length (including item array): 32
+
+<Data> -----
+ Item   1 -- Length:   30  Offset: 8160 (0x1fe0)  Flags: NORMAL
+ Item   2 -- Length:   30  Offset: 8128 (0x1fc0)  Flags: NORMAL
+
+
+*** End of File Encountered. Last Block Read: 0 ***
 ```
 
 # 3 表操作
