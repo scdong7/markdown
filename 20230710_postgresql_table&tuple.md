@@ -238,7 +238,7 @@ SELECT tuple_data_split('tb2'::regclass, t_data, t_infomask, t_infomask2, t_bits
 select pg_relation_filepath('t2');
 ```
 
-2.5 pg_filedump 
+## 2.5 pg_filedump 
 
 https://github.com/df7cb/pg_filedump
 
