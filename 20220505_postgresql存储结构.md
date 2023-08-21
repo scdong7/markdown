@@ -4,7 +4,7 @@
 flowchart TB;
 缓冲区管理<--SMGR存储介质管理器接口-->磁盘管理
 外存管理-->表文件
-subgraph      
+subgraph  
 fsm文件--附属-->表文件;
 vm文件--附属-->表文件;
 空闲空间管理-->fsm文件;
@@ -31,21 +31,16 @@ end;
   共享缓冲池
 
   本地私有缓冲池
-
 - Cache机制
 
   将进程最近的一些系统数据缓存在其私有内存中，其级别高于缓冲池
-
 - 虚拟文件描述符管理(Virtual File Desciptor,VFD)
 
   避免操作系统对进程打开文件数的限制。
-
 - 空闲空间管理
 
   快速定位空闲空间，方便插入新数据。
-
 - 进程间通信(IPC)
-
 - 大数据存储管理
 
   提供大对象(图片、文档等)和TOAST(The Oversized-Attribute Storage Technique)超尺寸字段存储技术
@@ -58,7 +53,7 @@ end;
 
 ### 2.1 SMGR存储介质管理器
 
-​	主要代码在src/backend/storage/smgr/smgr.c,提供对外存操作的统一接口。
+    主要代码在src/backend/storage/smgr/smgr.c,提供对外存操作的统一接口。
 
 ### 2.2 硬盘管理器
 
@@ -104,7 +99,6 @@ static Size SizeVfdCache = 0;
 - LRU池
 
   通过lruMoreRecently，lruLessRecently 链接组成双向链表。
-
 - FreeList空闲链表
 
   通过nextFree链接
@@ -203,7 +197,6 @@ VACUUM两种处理方式
 - 快速清理(Lazy VACUUM)
 
   vm仅在Lazy操作中被使用到
-
 - 完全清理(Full VACUUM)
 
   需要对这个表进行扫描
@@ -219,8 +212,6 @@ VM文件块结构
 ## 3. 内存管理
 
 ### 3.1 内存上下文
-
-
 
 ```mermaid
 flowchart TD
@@ -353,7 +344,7 @@ typedef struct AllocChunkData
 
 ### 3.2 Cache机制
 
-​	当数据库访问表时，需要表的模式信息，如列属性、OID、统计信息等。PG将表的模式信息存放在系统表中。对于PG来说，对于系统表和普通表的模式信息的访问是非常频繁的。PG引入Cache机制提高访问效率。
+    当数据库访问表时，需要表的模式信息，如列属性、OID、统计信息等。PG将表的模式信息存放在系统表中。对于PG来说，对于系统表和普通表的模式信息的访问是非常频繁的。PG引入Cache机制提高访问效率。
 Cache中包含系统表元组SysCache 和表模式信息RelCache.每一个进程都维护着自己的SysCache和RelCache。
 代码位置src/backend/utils/cache目录下
 
@@ -404,8 +395,6 @@ typedef struct catcache
 #endif
 } CatCache;
 ```
-
-
 
 #### 3.2.2 RelCache
 
@@ -614,11 +603,11 @@ typedef struct RelationData
 } RelationData;
 ```
 
-####  3.2.3 Cache同步
+#### 3.2.3 Cache同步
 
-​	PG通过SI Message(共享消息队列) 方式在进程间传递已被删除的无效元组，收到消息的进程同步将无效元组从自己的Cache中删除。
+    PG通过SI Message(共享消息队列) 方式在进程间传递已被删除的无效元组，收到消息的进程同步将无效元组从自己的Cache中删除。
 
-​    三种无效消息传递方式
+    三种无效消息传递方式
 
 - SysCache中元组无效
 - RelCache中RelationData结构无效
@@ -641,33 +630,87 @@ flowchart TD
 - pin
 
   实际就时访问计数器，对缓冲区加pin,pin的数目保存中缓冲区的refcount属性中。当refcount不为0表示有进程正在访问，此缓冲区不能替换。
-
 - lock
 
   写操作加EXCLUSIVE锁，读时加SHARE锁。
 
 #### 3.3.1 共享缓冲池
 
- PG共享池管理中，使用全局数组BufferDescriptors管理缓冲区。详见InitBufferPool函数。ReadBuffer_common是所有从缓冲区读取的通用函数。
+##### 3.3.1.1 后台进程如何读取一个页
+
+![image](./image/20220505_postgresql存储结构_01.png)
+
+##### 3.3.1.2 缓冲区管理器结构
+
+![image](./image/20220505_postgresql存储结构_02.png)
+
+* buffer table layer 是一个hash表，它存储着buffer_tag 与buffer_descriptor的buffer_id之间的映射。
+* buffer descriptors layer是一个由缓冲区描述符组成的数组。每个描述符与缓冲池槽一一对应。
+* buffer pool layer 是一个数组。每个槽存储一个数据文件页，数组槽的索引称为buffer_id.
+
+###### 3.3.1.2.1 buffer_tag
+
+PG 中的每个数据文件页面都可以分配到一个唯一的标签。
 
 ```c
+typedef struct RelFileNode
+{
+	Oid			spcNode;		/* tablespace */
+	Oid			dbNode;			/* database */
+	Oid			relNode;		/* relation */
+} RelFileNode;
 typedef struct buftag
 {
-	RelFileNode rnode;			/* physical relation identifier */
-	ForkNumber	forkNum;
-	BlockNumber blockNum;		/* blknum relative to begin of reln */
+	RelFileNode rnode;		/* physical relation identifier 
+					关系节点用于定位页面所属关系
+					*/
+	ForkNumber	forkNum;	/*关系分支编号用于定位关系文件的具体分支文件
+					一个关系可以有3种分支
+					编号0  关系的main分支
+					编号1  空闲空间（fsm分支）
+					编号2  可见性（vm分支)
+					*/
+	BlockNumber blockNum;		/* blknum relative to begin of reln
+					页块号用于定位在具体分支文件中的偏移量
+					 */
 } BufferTag;
+```
+
+###### 3.3.1.2.2 buffer_table
+
+缓冲表在逻辑上可以分为三个部分。
+
+* 散列函数
+
+  * 散列函数由[calc_bucket()](https://doxygen.postgresql.org/dynahash_8c.html#ae802f2654df749ae0e0aadf4b5c5bcbd) 和[hash()](https://doxygen.postgresql.org/rege__dfa_8c.html#a6aa3a27e7a0fc6793f3329670ac3b0cb)函数组合而成。
+  * 伪函数表示形式  uint32 bucket_slot = calc_bucket(unsigned hash(BufferTag buffer_tag),uint32 bucket_size)
+* 散列桶槽
+* 数据项
+
+  * 数据项包括两个值，即页面的buffer_tag和包含页面元数据的描述符的buffer_id.
+  * 例如数据项Tag_A,id=1表示在buffer_id =1的缓冲区描述符中，存储着页面Tag_A的元数据。
+
+如下图：
+![image](./image/20220505_postgresql存储结构_03.png)
+
+###### 3.3.1.2.3 buffer_Descriptor
+
+缓冲区描述符保存着**页面的元数据**。这些与缓冲区描述符**相对应的页**面保存在**缓冲池的槽**中。
+
+PG共享池管理中，使用全局数组BufferDescriptors管理缓冲区。详见InitBufferPool函数。ReadBuffer_common是所有从缓冲区读取的通用函数。
+
+```c
 typedef struct BufferDesc
 {
 	BufferTag	tag;			/* ID of page contained in buffer */
-	int			buf_id;			/* buffer's index number (from 0) */
+	int		buf_id;			/* buffer's index number (from 0) */
 
 	/* state of the tag, containing flags, refcount and usagecount */
 	pg_atomic_uint32 state;
 
-	int			wait_backend_pid;	/* backend PID of pin-count waiter */
-	int			freeNext;		/* link in freelist chain */
-	LWLock		content_lock;	/* to lock access to buffer contents */
+	int		wait_backend_pid;	/* backend PID of pin-count waiter */
+	int		freeNext;		/* link in freelist chain */
+	LWLock		content_lock;		/* to lock access to buffer contents */
 } BufferDesc;
 typedef union BufferDescPadded
 {
@@ -678,15 +721,28 @@ BufferDescPadded *BufferDescriptors;
 
 ```
 
+在PG启动时，所有缓冲区描述符的状态都为空，这些描述符构成了一个freelist的链表。初始阶段如下图：
+![image](./image/20220505_postgresql存储结构_04.png)
+下图展示了一个页面是如何加载的。
+![image](./image/20220505_postgresql存储结构_05.png)
 
+* 从freelist头部取一个空描述符，并将其钉住。即refcount和usage_count增加1。
+* 在缓冲表中插入新项，该表保存了页面buffer_tag和描述符buffer_id的关系。
+* 将页面从存储器中加载至缓冲区相应的槽中。
+* 将页面的元数据保存至所获取的描述符中。
+* 其他页面类似如上步骤。
+
+###### 3.3.1.2.4 buffer_pool
+
+缓冲池只是一个用于存储页面的简单数组，buffer_id是数组的索引号下标。每个缓冲池的槽就是一个页面大小8K。
 
 #### 3.3.2 本地缓冲池
 
-​	调用InitLocalBuffers函数完成初始化，缓冲区的分配主要通过LocalBufferAlloc函数。
+    调用InitLocalBuffers函数完成初始化，缓冲区的分配主要通过LocalBufferAlloc函数。
 
 ### 3.4 IPC
 
-​	PG中IPC主要采用共享内存的方式实现，即在系统中开辟一片所有进程都可读写的内存空间，并约定好即成读写这片内存的时机和方式，这样进程之间就可以通过共享内存交换数据。在共享内存的基础上，PG的IPC还提供一下功能
+    PG中IPC主要采用共享内存的方式实现，即在系统中开辟一片所有进程都可读写的内存空间，并约定好即成读写这片内存的时机和方式，这样进程之间就可以通过共享内存交换数据。在共享内存的基础上，PG的IPC还提供一下功能
 
 1. 进程和Postermaster的通信机制
 2. 统一管理进程的相关变量和函数
