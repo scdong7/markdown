@@ -24,11 +24,62 @@ WALsegment file name$=timelineId+(uint32)\dfrac{LSN−1}{16M*256}+(uint32)(\dfra
 WAL的文件名格式为 TTTTTTTTXXXXXXXX000000YY。这里’T’是时间线，'X’是LSN的高32位，'Y’是LSN的低32位。
 ![image](./image/20230822_postgresql_wal_02.png)
 
-#### 2.1.2 .history
+#### 2.1.2 `timelineId`时间线
 
-.history文件内容包括原.history文件，当前时间线切换记录和切换原因，作用于数据库的时间点恢复行为。当数据库引擎从多个时间线的备份中恢复时，数据库从.history文件中找到从pg_control的start_timeline到指定的recovery_target_timeline间的所有wal段文件进行恢复。
+ pg中的时间线时用于区分原始数据库集簇和恢复生成的数据库集簇。`timelineId`时间线标识是一个4Byte的无符号整数，从1开始计数。
 
-#### 2.1.3 archive_status
+由initdb创建的数据库集簇，其 `timelineId为1，每当数据库集簇恢复时，其`timelineId增加1。且WAL 段文件名也随之变化。
+![image](./image/20230822_postgresql_wal_10.png)
+
+#### 2.1.3 .history  时间线历史文件
+
+```
+"8-digit new timelineId".history
+```
+
+该文件记录了当前时间线是从那条时间线分叉出来的，以及分叉的时间。
+
+时间线历史文件至少一行，每行由以下三项组成。
+
+* 时间线标识（timelineId）--用于恢复的WAL时间线
+* LSN         			 --发生WAL段切换的LSN位置
+* 原因 （reason）		 --时间线变化发生的原因解释。
+
+```
+postgres> cat /home/postgres/archivelogs/00000002.history
+1	  0/A000198	before 2023-9-512:05:00.861324+00
+解释：数据库集簇（时间线2）基于时间线标识1的基础备份，并在2023-9-512:05:00.861324+00之前，通过重放日志，恢复至0/A000198位置。
+```
+
+#### 2.1.4 PITR与.history
+
+![image](./image/20230822_postgresql_wal_11.png)
+
+
+1. PostgreSQL从 `backup_label`文件中读取 `CHECKPOINT LOCATION`的值。
+2. 从 `recovery.conf`中读取一些参数值；在此示例中为 `restore_command`，`recovery_target_time`和 `recovery_target_timeline`。
+3. PostgreSQL读取时间线历史文件 `00000002.history`，该文件对应参数 `recovery_target_timeline`的值。
+
+   ```
+   restore_command = 'cp /mnt/server/archivedir/%f %p'
+   recovery_target_time = "2018-7-16 12:15:00 GMT"
+   recovery_target_timeline = 2
+   ```
+4. PostgreSQL通过以下步骤重放WAL数据：
+
+   1. 对于从重做点到 `LSN 0/A000198`（该值写在 `00000002.history`文件中）之间的WAL数据，PostgreSQL会（从合适的归档日志中）读取并重放 `TimelineID=1`的WAL数据。
+   2. 对于从 `LSN 0/A000198`，到时间戳 `2018-7-9 12:15:00`之间的WAL数据，PostgreSQL会（从合适的归档日志中）读取并重放 `TimelineID=2`的WAL数据。
+5. 当恢复过程完成时，当前的时间线标识将增加到3，并在 `pg_wal`目录和归档目录中创建名为 `00000003.history`的新时间线历史文件。
+
+   ```yaml
+   postgres> cat /home/postgres/archivelogs/00000003.history
+   1         0/A000198     before 2018-7-9 12:05:00.861324+00
+   2         0/B000078     before 2018-7-9 12:15:00.927133+00
+   ```
+
+  当你进行过超过一次的PITR时，应明确设置时间线标识，以便使用合适的时间线历史文件。因此，时间线历史文件不仅仅是数据库集簇的历史日志，还是PITR过程的参考恢复指令。
+
+#### 2.1.5 archive_status
 
 archive_status是wal段文件的备份目录，包括.ready和.done文件。超出wal_keep_segments数目限制的wal日志会在archive_status目录内被打标，归档操作完成后被进一步移除。
 
