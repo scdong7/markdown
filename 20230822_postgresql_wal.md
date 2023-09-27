@@ -55,7 +55,6 @@ postgres> cat /home/postgres/archivelogs/00000002.history
 
 ![image](./image/20230822_postgresql_wal_11.png)
 
-
 1. PostgreSQL从 `backup_label`文件中读取 `CHECKPOINT LOCATION`的值。
 2. 从 `recovery.conf`中读取一些参数值；在此示例中为 `restore_command`，`recovery_target_time`和 `recovery_target_timeline`。
 3. PostgreSQL读取时间线历史文件 `00000002.history`，该文件对应参数 `recovery_target_timeline`的值。
@@ -166,6 +165,36 @@ XLOG记录的数据部分可以分为两类：备份区块（完整的页面）�
 
 数据部分则由零个或多个区块数据与零个或一个主数据组成，区块数据与XLogRecordBlockHeader对应，主数据则与XLogRecordDataHeader对应。下图为V9.5后XLOG记录示例。
 ![image](./image/20230822_postgresql_wal_05.png)
+
+### 2.2.4 pg_waldump
+
+```sql
+postgres=# begin;
+BEGIN
+postgres=*# select pg_current_wal_lsn();
+ pg_current_wal_lsn
+--------------------
+ 0/1804AF0
+(1 row)
+
+postgres=*# insert into t3 values(3,'c');
+INSERT 0 1
+postgres=*# end;
+COMMIT
+postgres=#
+```
+
+```shell
+[postgres@localhost pg_wal]$ pg_waldump 000000010000000000000001
+rmgr: Standby     len (rec/tot):     50/    50, tx:          0, lsn: 0/01804840, prev 0/018047C8, desc: RUNNING_XACTS nextXid 771 latestCompletedXid 770 oldestRunningXid 771
+rmgr: Heap        len (rec/tot):     54/   474, tx:        771, lsn: 0/01804878, prev 0/01804840, desc: INSERT off 11 flags 0x00, blkref #0: rel 1663/5/16423 blk 0 FPW
+rmgr: Standby     len (rec/tot):     54/    54, tx:          0, lsn: 0/01804A58, prev 0/01804878, desc: RUNNING_XACTS nextXid 772 latestCompletedXid 770 oldestRunningXid 771; 1 xacts: 771
+rmgr: Transaction len (rec/tot):     34/    34, tx:        771, lsn: 0/01804A90, prev 0/01804A58, desc: ABORT 2023-09-18 22:15:39.159685 EDT
+rmgr: Standby     len (rec/tot):     50/    50, tx:          0, lsn: 0/01804AB8, prev 0/01804A90, desc: RUNNING_XACTS nextXid 772 latestCompletedXid 771 oldestRunningXid 772
+rmgr: Heap        len (rec/tot):     61/    61, tx:        772, lsn: 0/01804AF0, prev 0/01804AB8, desc: INSERT off 12 flags 0x00, blkref #0: rel 1663/5/16423 blk 0
+rmgr: Transaction len (rec/tot):     34/    34, tx:        772, lsn: 0/01804B30, prev 0/01804AF0, desc: COMMIT 2023-09-18 22:17:23.866351 EDT
+rmgr: Standby     len (rec/tot):     50/    50, tx:          0, lsn: 0/01804B58, prev 0/01804B30, desc: RUNNING_XACTS nextXid 773 latestCompletedXid 772 oldestRunningXid 773
+```
 
 ## 2.3 WAL记录的写入
 
